@@ -1,3 +1,5 @@
+from __future__ import print_function, division
+from builtins import range, object
 import numpy as np
 from netCDF4 import Dataset
 from multiprocessing import Pool
@@ -5,7 +7,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import glob
 from os import path
 
-class Grid:
+class Grid(object):
   def __init__(self, path):
     # nlp, nmp, nfluxtube, nlon_geo, nlat_geo, nheights_geo
     # flux_tube_max(lp), facfac_interface, ii[1-4]_interface, dd_interface
@@ -90,7 +92,7 @@ class Grid:
 
     return np.swapaxes(geo_data / self.dtot_inv,0,2)
 
-class Plasma:
+class Plasma(object):
   def __init__(self, filename, nlp, nmp, nfluxtube):
     self.ion_densities = np.zeros( (9, nmp, nlp, nfluxtube) )
 
@@ -109,7 +111,7 @@ class Plasma:
     self.electron_temperature = f.variables['electron_temperature'][:]
     self.ion_temperature      = f.variables['ion_temperature'][:]
 
-class Neutral:
+class Neutral(object):
   def __init__(self, filename, nlp, nmp, nfluxtube):
     self.velocity_apex = np.zeros( (3, nmp, nlp, nfluxtube) )
     self.velocity_geo  = np.zeros( (3, nmp, nlp, nfluxtube) )
@@ -133,7 +135,7 @@ class Neutral:
     except:
       pass
 
-class IPE:
+class IPE(object):
   def __init__(self, grid_filename):
     self.grid = Grid(grid_filename)
 
@@ -300,9 +302,9 @@ class IPE:
     o.close()
 
 def load_and_write(i):
-  print files[i]
+  print(files[i])
   timestamp = files[i][-15:-3]
-  print timestamp
+  print(timestamp)
   ipe.read_h5(files[i])
   ipe.write_netcdf(path.join(args.outdir,"IPE_Params.geo.{}.nc4".format(timestamp)))
 
@@ -318,5 +320,5 @@ MAX_PROCS = 4
 ipe = IPE(args.gridfile)
 files = glob.glob(path.join(args.indir,"IPE_State.apex.*.h5"))
 p = Pool(min([len(files),MAX_PROCS]))
-p.map(load_and_write,range(len(files)))
+p.map(load_and_write,list(range(len(files))))
 #load_and_write(0)
