@@ -94,7 +94,8 @@ MODULE IPE_Plasma_Class
 
   INTEGER, PARAMETER, PRIVATE    :: n_transport_species    = 4
   REAL(prec), PARAMETER, PRIVATE :: transport_min_altitude = 150000.0_prec
-  INTEGER, PARAMETER , PRIVATE   :: transport_highlat_lp   = 30
+ !INTEGER, PARAMETER , PRIVATE   :: transport_highlat_lp   = 30
+  INTEGER, PARAMETER , PRIVATE   :: transport_highlat_lp   = 25
   INTEGER, PARAMETER , PRIVATE   :: perp_transport_max_lp  = 151
 
   ! :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: !
@@ -788,6 +789,13 @@ CONTAINS
     REAL(prec), PARAMETER :: rad_to_deg = 57.295779513
     CHARACTER(len=128) :: errmsg
 
+    REAL(prec), dimension(:), allocatable :: ksi_fac2, ksi_fac3, ion_temperature_int2, electron_temperature_int2
+    REAL(prec), dimension(:,:), allocatable :: ion_densities_int2, ion_velocities_int2
+
+    integer :: lpmin10, lpmax10
+
+
+
       rc = IPE_SUCCESS
 
       CALL plasma % Calculate_Pole_Values( grid,                       &
@@ -946,6 +954,14 @@ CONTAINS
           ELSE ! lp_min =/= 1 ....
 
               
+            allocate (ksi_fac2(grid % flux_tube_max(lp)))
+            allocate (ksi_fac3(grid % flux_tube_max(lp)))
+            allocate (ion_temperature_int2(grid % flux_tube_max(lp)))
+            allocate (electron_temperature_int2(grid % flux_tube_max(lp)))
+            allocate (ion_densities_int2(n_conv_spec,grid % flux_tube_max(lp)))
+            allocate (ion_velocities_int2(n_conv_spec,grid % flux_tube_max(lp)))
+
+
               if(lp_t0(2).eq.0) then
                 lp_t0(1) = 1
                 lp_t0(2) = 2
@@ -1041,39 +1057,135 @@ CONTAINS
                 ENDDO
               ENDDO
 
-              IF( lp <= transport_highlat_lp )THEN
-                ksi_fac = 1.0_prec
-              ELSE
+
+             !IF( lp <= transport_highlat_lp )THEN
+             !  ksi_fac = 1.0_prec
+             !ELSE
+             !  ksi_fac = grid % magnetic_field_strength(i,lp,mp)/B_int
+             !ENDIF
+
+
+              ksi_fac = grid % magnetic_field_strength(i,lp,mp)/B_int
+
+
+              lpmin10 = transport_highlat_lp  - 10
+
+              if ( lp <= lpmin10               ) then
+                 ksi_fac = 1.0_prec
+              elseif ( lpmin10 < lp .and. lp <= transport_highlat_lp ) then
+                 ksi_fac = (lp - lpmin10) / (transport_highlat_lp - lpmin10) * &
+                           (ksi_fac - 1.0) + 1.0
+              else
                 ksi_fac = grid % magnetic_field_strength(i,lp,mp)/B_int
-              ENDIF
-
-              z = grid % altitude(i,lp)/1000.0_prec
-              if ((z.lt.200.0).and.(z.gt.100.0)) then
-              z_factor = (z - 100.0) / 100.0
-              ion_densities_int(1:n_conv_spec) = (z_factor * (ion_densities_int(1:n_conv_spec) - plasma % ion_densities_old(1:n_conv_spec,i,lp,mp))) &
-                                               + plasma % ion_densities_old(1:n_conv_spec,i,lp,mp)
-              ion_velocities_int(1:n_conv_spec) = (z_factor * (ion_velocities_int(1:n_conv_spec) - plasma % ion_velocities_old(1:n_conv_spec,i,lp,mp))) &
-                                               + plasma % ion_velocities_old(1:n_conv_spec,i,lp,mp)
-              ion_temperature_int = (z_factor * (ion_temperature_int - plasma % ion_temperature_old(i,lp,mp))) &
-                                               + plasma % ion_temperature_old(i,lp,mp)
-              electron_temperature_int = (z_factor * (electron_temperature_int - plasma % electron_temperature_old(i,lp,mp))) &
-                                               + plasma % electron_temperature_old(i,lp,mp)
-              endif
-              if (z.lt.100.0) then
-                 ion_densities_int(1:n_conv_spec) = plasma % ion_densities_old(1:n_conv_spec,i,lp,mp)
-                 ion_velocities_int(1:n_conv_spec) = plasma % ion_velocities_old(1:n_conv_spec,i,lp,mp)
-                 ion_temperature_int = plasma % ion_temperature_old(i,lp,mp)
-                 electron_temperature_int = plasma % electron_temperature_old(i,lp,mp)
               endif
 
-              plasma % ion_densities(1:n_conv_spec,i,lp,mp) = ion_densities_int(1:n_conv_spec)*( ksi_fac**2 )
-              plasma % ion_velocities(1:n_conv_spec,i,lp,mp) = ion_velocities_int(1:n_conv_spec)
+
+              ksi_fac2(i) = ksi_fac
+
+
+             !z = grid % altitude(i,lp)/1000.0_prec
+             !if ((z.lt.200.0).and.(z.gt.100.0)) then
+             !z_factor = (z - 100.0) / 100.0
+             !ion_densities_int(1:n_conv_spec) = (z_factor * (ion_densities_int(1:n_conv_spec) - plasma % ion_densities_old(1:n_conv_spec,i,lp,mp))) &
+             !                                 + plasma % ion_densities_old(1:n_conv_spec,i,lp,mp)
+             !ion_velocities_int(1:n_conv_spec) = (z_factor * (ion_velocities_int(1:n_conv_spec) - plasma % ion_velocities_old(1:n_conv_spec,i,lp,mp))) &
+             !                                 + plasma % ion_velocities_old(1:n_conv_spec,i,lp,mp)
+             !ion_temperature_int = (z_factor * (ion_temperature_int - plasma % ion_temperature_old(i,lp,mp))) &
+             !                                 + plasma % ion_temperature_old(i,lp,mp)
+             !electron_temperature_int = (z_factor * (electron_temperature_int - plasma % electron_temperature_old(i,lp,mp))) &
+             !                                 + plasma % electron_temperature_old(i,lp,mp)
+             !endif
+             !if (z.lt.100.0) then
+             !   ion_densities_int(1:n_conv_spec) = plasma % ion_densities_old(1:n_conv_spec,i,lp,mp)
+             !   ion_velocities_int(1:n_conv_spec) = plasma % ion_velocities_old(1:n_conv_spec,i,lp,mp)
+             !   ion_temperature_int = plasma % ion_temperature_old(i,lp,mp)
+             !   electron_temperature_int = plasma % electron_temperature_old(i,lp,mp)
+             !endif
+
+
+             !plasma % ion_densities(1:n_conv_spec,i,lp,mp) = ion_densities_int(1:n_conv_spec)*( ksi_fac**2 )
+             !plasma % ion_velocities(1:n_conv_spec,i,lp,mp) = ion_velocities_int(1:n_conv_spec)
+
+              ion_densities_int2 (1:n_conv_spec,i) = ion_densities_int(1:n_conv_spec)
+              ion_velocities_int2(1:n_conv_spec,i) = ion_velocities_int(1:n_conv_spec)
+
 !             plasma % ion_temperature(i,lp,mp) = ion_temperature_int
 !             plasma % electron_temperature(i,lp,mp) = electron_temperature_int
-              plasma % ion_temperature(i,lp,mp) = ion_temperature_int*( ksi_fac**(4.0_prec/3.0_prec) )
-              plasma % electron_temperature(i,lp,mp) = electron_temperature_int*( ksi_fac**(4.0_prec/3.0_prec) )
+
+             !plasma % ion_temperature(i,lp,mp) = ion_temperature_int*( ksi_fac**(4.0_prec/3.0_prec) )
+             !plasma % electron_temperature(i,lp,mp) = electron_temperature_int*( ksi_fac**(4.0_prec/3.0_prec) )
+
+              ion_temperature_int2(i)      = ion_temperature_int
+              electron_temperature_int2(i) = electron_temperature_int
+
 
  300        CONTINUE  !  i = 1, grid % flux_tube_max(lp)
+
+
+            ! smooth the ksi profile
+
+            ksi_fac3(1) = ksi_fac2(1)
+            ksi_fac3(grid % flux_tube_max(lp)) = ksi_fac2(grid % flux_tube_max(lp))
+            do i = 2, grid % flux_tube_max(lp) - 1
+            ksi_fac3(i) = 0.25 * (ksi_fac2(i-1) + 2.0* ksi_fac2(i) + ksi_fac2(i+1))
+            enddo
+
+
+            ! apply the ksi factor
+
+            do i = 1, grid % flux_tube_max(lp)
+            plasma % ion_temperature(i,lp,mp) = ion_temperature_int2(i)*( ksi_fac3(i)**(4.0_prec/3.0_prec) )
+            plasma % electron_temperature(i,lp,mp) = electron_temperature_int2(i)*( ksi_fac3(i)**(4.0_prec/3.0_prec) )
+            plasma % ion_densities(1:n_conv_spec,i,lp,mp) = ion_densities_int2(1:n_conv_spec,i)*( ksi_fac3(i)**2 )
+            plasma % ion_velocities(1:n_conv_spec,i,lp,mp) = ion_velocities_int2(1:n_conv_spec,i)
+            enddo
+
+
+            deallocate(ksi_fac2, ksi_fac3)
+            deallocate(ion_temperature_int2, electron_temperature_int2)
+            deallocate(ion_densities_int2, ion_velocities_int2)
+
+
+
+            ! appy the z factor
+
+           !DO i = 1, grid % flux_tube_max(lp)
+
+           !  z = grid % altitude(i,lp)/1000.0_prec
+
+           !  if (z < 100.0) then
+
+           !     plasma % ion_densities(1:n_conv_spec,i,lp,mp)  = plasma % ion_densities_old(1:n_conv_spec,i,lp,mp)
+           !     plasma % ion_velocities(1:n_conv_spec,i,lp,mp) = plasma % ion_velocities_old(1:n_conv_spec,i,lp,mp)
+           !     plasma % ion_temperature(i,lp,mp)      = plasma % ion_temperature_old(i,lp,mp)
+           !     plasma % electron_temperature(i,lp,mp) = plasma % electron_temperature_old(i,lp,mp)
+
+           !  elseif (z <= 200.0 .and. z >= 100.0 ) then
+
+           !  z_factor = (z - 100.0) / 100.0
+
+           !  plasma % ion_densities(1:n_conv_spec,i,lp,mp)  = (z_factor * ( &
+           !                                     plasma % ion_densities(1:n_conv_spec,i,lp,mp) &
+           !                                   - plasma % ion_densities_old(1:n_conv_spec,i,lp,mp))) &
+           !                                   + plasma % ion_densities_old(1:n_conv_spec,i,lp,mp)
+           !  plasma % ion_velocities(1:n_conv_spec,i,lp,mp) = (z_factor * ( &
+           !                                     plasma % ion_velocities(1:n_conv_spec,i,lp,mp) &
+           !                                   - plasma % ion_velocities_old(1:n_conv_spec,i,lp,mp))) &
+           !                                   + plasma % ion_velocities_old(1:n_conv_spec,i,lp,mp)
+           !  plasma % ion_temperature(i,lp,mp) = (z_factor * ( &
+           !                                     plasma % ion_temperature(i,lp,mp) &
+           !                                   - plasma % ion_temperature_old(i,lp,mp))) &
+           !                                   + plasma % ion_temperature_old(i,lp,mp)
+           !  plasma % electron_temperature(i,lp,mp) = (z_factor * ( &
+           !                                     plasma % electron_temperature(i,lp,mp) &
+           !                                   - plasma % electron_temperature_old(i,lp,mp))) &
+           !                                   + plasma % electron_temperature_old(i,lp,mp)
+
+           !  endif
+
+           !ENDDO
+
+
 
           ENDIF ! lp_min =/= 1
 
